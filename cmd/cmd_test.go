@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEnsureDelegateGitignore_NewFile(t *testing.T) {
@@ -126,7 +127,7 @@ func TestRootCommand_HasSubcommands(t *testing.T) {
 		subcommands[cmd.Name()] = true
 	}
 
-	expected := []string{"run", "pull", "list", "cleanup"}
+	expected := []string{"run", "pull", "list", "status", "cleanup"}
 	for _, name := range expected {
 		if !subcommands[name] {
 			t.Errorf("expected subcommand %q to be registered", name)
@@ -268,6 +269,80 @@ func TestListCmd_HasAlias(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("list command should have 'ls' alias, got %v", listCmd.Aliases)
+	}
+}
+
+func TestStatusCmd_RequiresArg(t *testing.T) {
+	if statusCmd.Args == nil {
+		t.Error("status command should have Args validation")
+	}
+}
+
+func TestStatusCmd_UseLine(t *testing.T) {
+	if statusCmd.Use != "status <branch>" {
+		t.Errorf("expected Use to be 'status <branch>', got %q", statusCmd.Use)
+	}
+}
+
+func TestRunStatus_BranchNotFound(t *testing.T) {
+	// Point state at an empty temp dir so Load() returns an empty state
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	err := runStatus(nil, []string{"nonexistent-branch"})
+	if err == nil {
+		t.Fatal("expected error for nonexistent branch")
+	}
+	if !strings.Contains(err.Error(), "no delegation found") {
+		t.Errorf("expected 'no delegation found' error, got %q", err.Error())
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		want     string
+	}{
+		{
+			name:     "zero",
+			duration: 0,
+			want:     "0m",
+		},
+		{
+			name:     "minutes only",
+			duration: 35 * time.Minute,
+			want:     "35m",
+		},
+		{
+			name:     "hours and minutes",
+			duration: 2*time.Hour + 15*time.Minute,
+			want:     "2h 15m",
+		},
+		{
+			name:     "days hours minutes",
+			duration: 3*24*time.Hour + 5*time.Hour + 42*time.Minute,
+			want:     "3d 5h 42m",
+		},
+		{
+			name:     "exactly one day",
+			duration: 24 * time.Hour,
+			want:     "1d 0h 0m",
+		},
+		{
+			name:     "seconds rounded to zero minutes",
+			duration: 30 * time.Second,
+			want:     "0m",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatDuration(tt.duration)
+			if got != tt.want {
+				t.Errorf("formatDuration(%v) = %q, want %q", tt.duration, got, tt.want)
+			}
+		})
 	}
 }
 
