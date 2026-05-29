@@ -163,6 +163,92 @@ func TestCleanupCmd_RequiresArg(t *testing.T) {
 	}
 }
 
+func TestCleanupCmd_HasFlags(t *testing.T) {
+	flags := []string{"all", "force"}
+	for _, name := range flags {
+		if cleanupCmd.Flags().Lookup(name) == nil {
+			t.Errorf("cleanup command should have --%s flag", name)
+		}
+	}
+}
+
+func TestRunCleanup_NoBranchNoAll(t *testing.T) {
+	origAll := flagCleanupAll
+	origForce := flagCleanupForce
+	defer func() {
+		flagCleanupAll = origAll
+		flagCleanupForce = origForce
+	}()
+
+	flagCleanupAll = false
+	flagCleanupForce = false
+
+	err := runCleanup(nil, []string{})
+	if err == nil {
+		t.Fatal("expected error when no branch and no --all")
+	}
+	if !strings.Contains(err.Error(), "provide a branch name") {
+		t.Errorf("expected 'provide a branch name' error, got %q", err.Error())
+	}
+}
+
+func TestRunCleanup_AllWithBranch(t *testing.T) {
+	origAll := flagCleanupAll
+	origForce := flagCleanupForce
+	defer func() {
+		flagCleanupAll = origAll
+		flagCleanupForce = origForce
+	}()
+
+	flagCleanupAll = true
+	flagCleanupForce = false
+
+	err := runCleanup(nil, []string{"some-branch"})
+	if err == nil {
+		t.Fatal("expected error when --all used with a branch")
+	}
+	if !strings.Contains(err.Error(), "cannot use --all") {
+		t.Errorf("expected 'cannot use --all' error, got %q", err.Error())
+	}
+}
+
+func TestCleanupDelegateDir_RemovesEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	delegateDir := filepath.Join(tmpDir, ".delegate")
+	if err := os.MkdirAll(delegateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanupDelegateDir(tmpDir)
+
+	if _, err := os.Stat(delegateDir); !os.IsNotExist(err) {
+		t.Error("empty .delegate directory should be removed")
+	}
+}
+
+func TestCleanupDelegateDir_KeepsNonEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	delegateDir := filepath.Join(tmpDir, ".delegate")
+	if err := os.MkdirAll(filepath.Join(delegateDir, "other-branch"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanupDelegateDir(tmpDir)
+
+	if _, err := os.Stat(delegateDir); os.IsNotExist(err) {
+		t.Error("non-empty .delegate directory should NOT be removed")
+	}
+}
+
+func TestCleanupDelegateDir_MissingDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Should not panic when .delegate doesn't exist
+	cleanupDelegateDir(tmpDir)
+}
+
 func TestPullCmd_RequiresArg(t *testing.T) {
 	if pullCmd.Args == nil {
 		t.Error("pull command should have Args validation")
