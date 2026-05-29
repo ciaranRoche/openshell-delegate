@@ -51,10 +51,9 @@ func RepoName(repoPath string) string {
 }
 
 // WorktreeDir returns the path where the worktree should be created.
-// Convention: <repo-parent>/worktrees/<branch>
+// Convention: <repo>/.delegate/<branch> (gitignored, self-contained)
 func WorktreeDir(repoPath, branch string) string {
-	parent := filepath.Dir(repoPath)
-	return filepath.Join(parent, "worktrees", branch)
+	return filepath.Join(repoPath, ".delegate", branch)
 }
 
 // Create creates a git worktree on a new branch.

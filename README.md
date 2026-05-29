@@ -38,7 +38,7 @@ opencode        # Run your agent
 openshell-delegate pull fix-scaling
 
 # Review locally
-cd ../worktrees/fix-scaling
+cd .delegate/fix-scaling
 git diff
 git add -A && git commit -m "fix scaling"
 git push origin fix-scaling
@@ -67,7 +67,7 @@ Flags:
 
 What it does:
 
-1. Creates a git worktree at `<repo-parent>/worktrees/<branch>`
+1. Creates a git worktree at `<repo>/.delegate/<branch>` (automatically gitignored)
 2. Writes `TASK.md` if `--task` or `--task-file` provided
 3. Appends sandbox context to `AGENTS.md`
 4. Creates an OpenShell sandbox from the configured image
@@ -152,14 +152,12 @@ All config values can be overridden by CLI flags.
 Host                                    Sandbox (OpenShell container)
 ----                                    -------
 ~/Projects/myproject/                   /sandbox/workspace/
-  (your working copy, untouched)          (worktree snapshot)
-                                          TASK.md (your task description)
-~/Projects/worktrees/fix-scaling/         AGENTS.md (project rules + sandbox context)
-  (git worktree on branch fix-scaling)
-  (results pulled back here)
+  .delegate/                              (worktree contents)
+    fix-scaling/                          TASK.md (your task description)
+      (git worktree, gitignored)          AGENTS.md (project rules + sandbox context)
 ```
 
-The worktree pattern keeps your working copy untouched. The agent works on an isolated branch inside the sandbox. When you pull results back, the worktree is a regular git checkout you can diff, commit, and push.
+The worktree is created inside your repo under `.delegate/` (automatically gitignored). Your working copy stays untouched. The agent works on an isolated branch inside the sandbox. When you pull results back, the worktree is a regular git checkout you can diff, commit, and push.
 
 ## Shorthand Alias
 

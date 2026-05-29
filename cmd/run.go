@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ciaranRoche/openshell-delegate/internal/config"
@@ -120,6 +121,9 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fix the above issues and retry")
 	}
 
+	// Ensure .delegate is gitignored
+	ensureDelegateGitignore(repoPath)
+
 	// Create worktree
 	fmt.Printf("Creating worktree: %s (branch: %s)\n", worktree.WorktreeDir(repoPath, flagBranch), flagBranch)
 	wtDir, err := worktree.Create(repoPath, flagBranch)
@@ -215,4 +219,33 @@ func runRun(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Cleanup:   openshell-delegate cleanup %s\n", flagBranch)
 
 	return nil
+}
+
+// ensureDelegateGitignore adds .delegate to the repo's .gitignore if not already present.
+func ensureDelegateGitignore(repoPath string) {
+	gitignorePath := filepath.Join(repoPath, ".gitignore")
+
+	// Read existing .gitignore
+	data, err := os.ReadFile(gitignorePath)
+	if err == nil {
+		// Check if .delegate is already ignored
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.TrimSpace(line) == ".delegate" || strings.TrimSpace(line) == ".delegate/" {
+				return
+			}
+		}
+	}
+
+	// Append .delegate to .gitignore
+	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return // best effort
+	}
+	defer f.Close()
+
+	// Add a newline before if file doesn't end with one
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		f.WriteString("\n")
+	}
+	f.WriteString(".delegate/\n")
 }
