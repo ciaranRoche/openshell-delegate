@@ -102,7 +102,7 @@ func Upload(name, localPath, remotePath string) error {
 
 	// Upload the tarball as a single file.
 	tarName := filepath.Base(tarPath)
-	remoteArchive := "/tmp/" + tarName
+	remoteArchive := "/sandbox/" + tarName
 	uploadCmd := exec.Command("openshell", "sandbox", "upload", name, tarPath, remoteArchive)
 	uploadCmd.Stdout = os.Stdout
 	uploadCmd.Stderr = os.Stderr
@@ -125,7 +125,7 @@ func Upload(name, localPath, remotePath string) error {
 // archive, and extract it locally.
 func Download(name, remotePath, localPath string) error {
 	// Create a tarball inside the sandbox.
-	remoteArchive := "/tmp/od-download.tar.gz"
+	remoteArchive := "/sandbox/od-download.tar.gz"
 	tarScript := fmt.Sprintf("tar czf %s -C %s .", remoteArchive, remotePath)
 	if _, err := Exec(name, tarScript); err != nil {
 		return fmt.Errorf("could not create tarball in sandbox: %w", err)
