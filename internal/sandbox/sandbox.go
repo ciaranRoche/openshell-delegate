@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -76,25 +77,90 @@ func Exec(name string, command string) (string, error) {
 	return string(out), nil
 }
 
-// Upload transfers a local path to the sandbox.
+// Upload transfers a local directory to the sandbox using a tarball to
+// preserve dotfiles (e.g. .gitignore). The openshell directory upload
+// strips dotfiles, so we tar locally, upload the archive as a single
+// file, and extract it inside the sandbox.
 func Upload(name, localPath, remotePath string) error {
-	cmd := exec.Command("openshell", "sandbox", "upload", name, localPath, remotePath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	// Create a temp tarball of the directory contents.
+	tmpFile, err := os.CreateTemp("", "od-upload-*.tar.gz")
+	if err != nil {
+		return fmt.Errorf("could not create temp file: %w", err)
+	}
+	tarPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tarPath)
+
+	// Tar the directory contents (not the directory itself).
+	// Use -C to change into the directory so paths are relative.
+	tarCmd := exec.Command("tar", "czf", tarPath, "-C", localPath, ".")
+	tarCmd.Stdout = os.Stdout
+	tarCmd.Stderr = os.Stderr
+	if err := tarCmd.Run(); err != nil {
+		return fmt.Errorf("could not create tarball: %w", err)
+	}
+
+	// Upload the tarball as a single file.
+	tarName := filepath.Base(tarPath)
+	remoteArchive := "/tmp/" + tarName
+	uploadCmd := exec.Command("openshell", "sandbox", "upload", name, tarPath, remoteArchive)
+	uploadCmd.Stdout = os.Stdout
+	uploadCmd.Stderr = os.Stderr
+	if err := uploadCmd.Run(); err != nil {
 		return fmt.Errorf("upload failed: %w", err)
 	}
+
+	// Extract the tarball inside the sandbox.
+	extractScript := fmt.Sprintf("mkdir -p %s && tar xzf %s -C %s && rm -f %s", remotePath, remoteArchive, remotePath, remoteArchive)
+	if _, err := Exec(name, extractScript); err != nil {
+		return fmt.Errorf("could not extract tarball in sandbox: %w", err)
+	}
+
 	return nil
 }
 
-// Download transfers a remote path from the sandbox to the local filesystem.
+// Download transfers a remote directory from the sandbox to the local
+// filesystem using a tarball to preserve dotfiles. The openshell directory
+// download may strip dotfiles, so we tar inside the sandbox, download the
+// archive, and extract it locally.
 func Download(name, remotePath, localPath string) error {
-	cmd := exec.Command("openshell", "sandbox", "download", name, remotePath, localPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	// Create a tarball inside the sandbox.
+	remoteArchive := "/tmp/od-download.tar.gz"
+	tarScript := fmt.Sprintf("tar czf %s -C %s .", remoteArchive, remotePath)
+	if _, err := Exec(name, tarScript); err != nil {
+		return fmt.Errorf("could not create tarball in sandbox: %w", err)
+	}
+
+	// Download the tarball as a single file.
+	tmpFile, err := os.CreateTemp("", "od-download-*.tar.gz")
+	if err != nil {
+		return fmt.Errorf("could not create temp file: %w", err)
+	}
+	tarPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tarPath)
+
+	downloadCmd := exec.Command("openshell", "sandbox", "download", name, remoteArchive, tarPath)
+	downloadCmd.Stdout = os.Stdout
+	downloadCmd.Stderr = os.Stderr
+	if err := downloadCmd.Run(); err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
+
+	// Extract locally into the target directory.
+	if err := os.MkdirAll(localPath, 0o755); err != nil {
+		return fmt.Errorf("could not create local directory: %w", err)
+	}
+	extractCmd := exec.Command("tar", "xzf", tarPath, "-C", localPath)
+	extractCmd.Stdout = os.Stdout
+	extractCmd.Stderr = os.Stderr
+	if err := extractCmd.Run(); err != nil {
+		return fmt.Errorf("could not extract tarball locally: %w", err)
+	}
+
+	// Clean up remote archive.
+	_, _ = Exec(name, fmt.Sprintf("rm -f %s", remoteArchive))
+
 	return nil
 }
 

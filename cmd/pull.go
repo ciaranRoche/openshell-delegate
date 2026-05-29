@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/ciaranRoche/openshell-delegate/internal/sandbox"
 	"github.com/ciaranRoche/openshell-delegate/internal/state"
@@ -57,18 +56,9 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not download workspace: %w", err)
 	}
 
-	// Find the downloaded content -- openshell puts it under a subdirectory.
-	// The subdirectory name varies (could be "workspace", the sandbox name, etc.)
-	// so we scan the temp dir for the actual content directory.
+	// The tarball-based download extracts directly into tmpDir,
+	// so the content is at the top level (no subdirectory nesting).
 	src := tmpDir
-	entries, err := os.ReadDir(tmpDir)
-	if err != nil {
-		return fmt.Errorf("could not read download directory: %w", err)
-	}
-	// If there's exactly one subdirectory and no files, descend into it
-	if len(entries) == 1 && entries[0].IsDir() {
-		src = filepath.Join(tmpDir, entries[0].Name())
-	}
 
 	// Rsync into worktree, excluding .git
 	rsyncCmd := exec.Command("rsync", "-a", "--delete", "--exclude=.git", src+"/", d.Worktree+"/")
