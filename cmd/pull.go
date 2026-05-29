@@ -57,10 +57,17 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not download workspace: %w", err)
 	}
 
-	// Find the downloaded content -- openshell may put it under a subdirectory
-	src := filepath.Join(tmpDir, "workspace")
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		src = tmpDir
+	// Find the downloaded content -- openshell puts it under a subdirectory.
+	// The subdirectory name varies (could be "workspace", the sandbox name, etc.)
+	// so we scan the temp dir for the actual content directory.
+	src := tmpDir
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return fmt.Errorf("could not read download directory: %w", err)
+	}
+	// If there's exactly one subdirectory and no files, descend into it
+	if len(entries) == 1 && entries[0].IsDir() {
+		src = filepath.Join(tmpDir, entries[0].Name())
 	}
 
 	// Rsync into worktree, excluding .git
